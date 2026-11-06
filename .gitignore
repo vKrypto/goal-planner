@@ -3,3 +3,7 @@ dist/
 *.tsbuildinfo
 test-results/
 playwright-report/
+.env
+.env.*
+!.env.example
+sync-test-results/

@@ -1,0 +1,19 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "target_planner": {
+      "$uid": {
+        "$data_id": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid && newData.exists()",
+          ".validate": "newData.hasChildren(['hash', 'payload', 'updatedAt'])",
+          "hash": { ".validate": "newData.isString() && newData.val().length === 64" },
+          "payload": { ".validate": "newData.isString() && newData.val().length <= 3500000" },
+          "updatedAt": { ".validate": "newData.isString()" },
+          "$other": { ".validate": false }
+        }
+      }
+    }
+  }
+}

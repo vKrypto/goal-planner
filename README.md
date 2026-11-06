@@ -1,6 +1,6 @@
 # Target Planner
 
-A mobile-first React + TypeScript PWA for personal targets and intentional purchases. No account or backend; plans stay in localStorage on the current browser/device.
+A mobile-first React + TypeScript PWA for personal targets and intentional purchases. Plans save in localStorage first, with optional Firebase or Supabase cloud sync configured per browser.
 
 
 [Open Interactive Demo](https://username.github.io/repo/)
@@ -32,8 +32,9 @@ Deploy the generated `dist/` directory on a static host with HTTPS. The build ge
 - INR, USD, EUR, GBP or JPY; currency locks while purchases exist to protect stored amounts.
 - Versioned JSON backup/restore with validation and explicit replacement confirmation.
 - Responsive layout, keyboard-accessible dialogs, offline app shell, installation guidance.
+- Optional cloud sync with SHA-256 version comparison, conditional writes, and explicit conflict resolution.
 
-Reminders appear when the app is open; closed-app notifications are not supported. Photos are resized and capped; the app reserves a conservative 3.5 MB localStorage budget. Browser storage can still be cleared or evicted, so export backups regularly. Data does not sync between devices. Corrupt/unavailable storage or changes from another tab pause saving to prevent accidental overwrites. Notes render as plain text and product links allow HTTP(S) only. No external fonts, analytics, or network services are required.
+Reminders appear when the app is open; closed-app notifications are not supported. Photos are resized and capped; the app reserves a conservative 3.5 MB localStorage budget. Browser storage can still be cleared or evicted, so export backups regularly. Data syncs between devices only when you connect the same cloud dataset in each browser. Corrupt/unavailable storage or changes from another tab pause saving to prevent accidental overwrites. Notes render as plain text and product links allow HTTP(S) only. No external fonts or analytics are used. Cloud connections are optional; the app works locally without them.
 
 ## Structure
 
@@ -45,6 +46,8 @@ Reminders appear when the app is open; closed-app notifications are not supporte
 - `tests/`: domain and browser smoke tests.
 
 The smoke test uses an installed Google Chrome by default. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use another Chromium executable, or `TARGET_PLANNER_URL` to test a different preview URL.
+
+See [cloud setup and server details](deploy/README.md) for Firebase/Supabase configuration. Run `node tests/cloud-smoke.mjs` against the preview for two-device sync tests (mock cloud transport). Firebase/Supabase adapters have unit tests; live integration requires your provider project and account.
 
 See `PLAN.md` for product decisions and intended scope.
 

@@ -7,8 +7,9 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build && node scripts/finalize-pwa.mjs",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node --import tsx tests/model.test.ts",
-    "test:smoke": "node tests/smoke.mjs"
+    "test": "node --import tsx tests/model.test.ts && node --import tsx tests/sync.test.ts",
+    "test:smoke": "node tests/smoke.mjs",
+    "test:cloud": "node tests/cloud-smoke.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",

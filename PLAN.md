@@ -105,9 +105,15 @@ Use focused automated tests for date arithmetic, money calculations, schema vali
 - “Range” means an alternative minimum/maximum unit price, not a budget or product category.
 - Targets require a date; purchases may be undated.
 - Each item supports one optional photo.
-- Plans stay on one browser/device, with manual backup and restore.
+- Plans save locally, with manual backup/restore and optional direct-browser Firebase or Supabase sync.
 - Reminders initially mean in-app reminders, without guaranteed background delivery.
 
 ## 9. Deferred work
 
-Cloud sync, authentication, shared plans, price scraping, payment or checkout, recurring reminders, multiple currencies, subtasks, and calendar integration are outside the first version.
+Shared plans, price scraping, payment or checkout, recurring reminders, multiple currencies, subtasks, and calendar integration are outside the first version.
+
+## 10. Optional cloud sync
+
+Firebase Realtime Database and Supabase connect directly from the browser; no app backend is required. Users configure their project, existing account, and Data ID in settings. Session credentials remain local and are excluded from backups and synced snapshots. Provider rules/RLS isolate each account.
+
+Sync compares a canonical SHA-256 snapshot hash with the last synced and remote hashes. Conditional writes reject races. Concurrent divergent edits require explicit whole-version conflict resolution. Sync runs on opening, focus, reconnect, local edits, and once per minute while visible. See `deploy/README.md` for provider setup.
