@@ -9,3 +9,16 @@ plan category:
     date based planning: title, description, target date, notes, photo(optional), reminder (optional)
     purchase planning: name, link, price, range, quantity (default 1), notes, photo(optional), purchase date (optional)
     simplest ui to allow users to quickly add and view their plans without unnecessary clutter. The interface will be intuitive, with clear navigation and easy-to-use forms for adding new plans.
+
+
+option to attach a mongodb database
+
+where we can sync all things when user opens it will check for all data has been synced and if not, it will sync the data to the cloud. This will allow users to access their plans from multiple devices and ensure that their data is always up-to-date., it can use data_id more like git, and compare with last version it was synced.
+
+user open page:
+--> fire query to get last hash synced.
+--> check if any new hash is there, if yes, then push it to mongodb.
+we will have two option mongodb/firebase/supabase options configuration options (user can add it from frontend):
+once connected it will store credentials in local only.
+
+for me can you please fire one mongo db instance [shared_mongo] in proxmox-ubuntu server and name of database [target planner]
