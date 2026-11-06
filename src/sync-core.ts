@@ -1,6 +1,8 @@
 import { emptyData, validateData, type Data } from './model';
 export type Provider = 'firebase' | 'supabase';
-export type Connection = { provider: Provider; endpoint: string; dataId: string; apiKey: string; token: string; email: string; refreshToken?: string; expiresAt?: number };
+export type AuthMode = 'account' | 'sync-key' | 'anonymous';
+export const authMode = (c: Connection): AuthMode => c.authMode ?? 'account';
+export type Connection = { authMode?: AuthMode; syncKey?: string; keyId?: string; provider: Provider; endpoint: string; dataId: string; apiKey: string; token: string; email: string; refreshToken?: string; expiresAt?: number };
 export type CloudSnapshot = { hash: string; payload: string; updatedAt: string };
 export type SyncMeta = { connectionId: string; lastHash: string | null; syncedAt?: string };
 export const CONNECTION_KEY = 'target-planner.connection.v1';
@@ -31,14 +33,18 @@ export function decideSync(local: string, remote: string | null, baseline: strin
   return 'conflict';
 }
 export const defaultEmptyHash = () => hashData(emptyData());
-export const connectionId = (c: Connection) => `${c.provider}|${c.endpoint.replace(/\/$/,'')}|${c.dataId}|${c.email.toLowerCase()}`;
+export const connectionId = (c: Connection) => `${c.provider}|${c.endpoint.replace(/\/$/,'')}|${c.dataId}|${c.email.toLowerCase()}|${authMode(c)}|${authMode(c)==='sync-key' ? c.keyId ?? c.syncKey : ''}`;
 export function validateConnection(c: Connection): Connection {
   if (!['firebase','supabase'].includes(c.provider)) throw new Error('Choose a supported provider.');
   let url: URL; try { url = new URL(c.endpoint); } catch { throw new Error('Enter a complete HTTPS endpoint URL.'); }
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(url.hostname))) throw new Error('Cloud connections require HTTPS. Localhost HTTP is allowed for development.');
   if (url.username || url.password || url.search || url.hash) throw new Error('Use an endpoint without credentials, a query string, or a fragment.');
   if (!/^[A-Za-z0-9_-]{8,100}$/.test(c.dataId)) throw new Error('Data ID must be 8–100 letters, numbers, hyphens, or underscores. Use the same ID on every device.');
-  if (!c.apiKey.trim() || !c.email.trim()) throw new Error('Enter your project key and account email.');
+  if (!c.apiKey.trim()) throw new Error('Enter your project’s publishable / Web API key.');
+  const mode = authMode(c);
+  if (!['account','sync-key','anonymous'].includes(mode) || (mode==='sync-key' && c.provider!=='supabase') || (mode==='anonymous' && c.provider!=='firebase')) throw new Error('Choose a supported connection method for this provider.');
+  if (mode==='account' && !c.email.trim()) throw new Error('Enter an account email, or choose a method without sign-in.');
+  if (mode==='sync-key' && !/^[a-f0-9]{64}$/.test(c.syncKey ?? '')) throw new Error('Generate a private sync key, or paste the 64-character key from your other device.');
   if (c.provider === 'supabase') {
     if (c.apiKey.startsWith('sb_secret_')) throw new Error('Use a publishable/anon key, never a service-role or secret key.');
     try { const claims = JSON.parse(atob(c.apiKey.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); if (claims.role === 'service_role') throw new Error('service_role'); } catch (e) { if ((e as Error).message === 'service_role') throw new Error('Use a publishable/anon key, never a service-role key.'); }
@@ -47,3 +53,5 @@ export function validateConnection(c: Connection): Connection {
 }
 export function loadConnection(): Connection | null { const raw = localStorage.getItem(CONNECTION_KEY); return raw ? validateConnection(JSON.parse(raw)) : null; }
 export class SyncConflict extends Error { constructor() { super('The cloud changed during sync. Check again before choosing a version.'); } }
+
+export function generateSyncKey() { return Array.from(crypto.getRandomValues(new Uint8Array(32)), b=>b.toString(16).padStart(2,'0')).join(''); }

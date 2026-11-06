@@ -1,19 +1,25 @@
-import { SyncConflict, validateConnection, type Connection, type CloudSnapshot } from './sync-core';
+import { SyncConflict, authMode, validateConnection, type Connection, type CloudSnapshot } from './sync-core';
 const TIMEOUT = 15000;
 async function request(url: string, init: RequestInit = {}) {
   const response = await fetch(url, { ...init, cache: 'no-store', signal: AbortSignal.timeout(TIMEOUT), referrerPolicy: 'no-referrer' });
   if ([409,412].includes(response.status)) throw new SyncConflict();
+  if (response.status===404) throw new Error('Cloud setup is missing. Open First-time setup and run the SQL for your selected connection method.');
   if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? 'Cloud access denied. Check your credentials and database permissions.' : `Cloud request failed (${response.status}). Check the endpoint and provider setup.`);
   return response;
 }
 export async function authenticate(input: Connection, password?: string): Promise<Connection> {
   const c = validateConnection(input);
+  if (authMode(c)==='sync-key') {
+    const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(c.syncKey!));
+    return {...c,token:'',email:'',refreshToken:undefined,expiresAt:undefined,keyId:Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('')};
+  }
   if (!password && c.token && (c.expiresAt ?? 0) > Date.now() + 60000) return c;
-  if (!password && !c.refreshToken) throw new Error('Sign in with your cloud account password to connect.');
+  if (authMode(c)==='account' && !password && !c.refreshToken) throw new Error('Sign in with your cloud account password to connect.');
   if (c.provider === 'firebase') {
-    const refresh = !password;
-    const url = refresh ? `https://securetoken.googleapis.com/v1/token?key=${encodeURIComponent(c.apiKey)}` : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(c.apiKey)}`;
-    const body = refresh ? { grant_type:'refresh_token', refresh_token:c.refreshToken } : { email:c.email, password, returnSecureToken:true };
+    const anonymous = authMode(c)==='anonymous';
+    const refresh = !password && Boolean(c.refreshToken);
+    const url = refresh ? `https://securetoken.googleapis.com/v1/token?key=${encodeURIComponent(c.apiKey)}` : `https://identitytoolkit.googleapis.com/v1/accounts:${anonymous ? 'signUp' : 'signInWithPassword'}?key=${encodeURIComponent(c.apiKey)}`;
+    const body = refresh ? { grant_type:'refresh_token', refresh_token:c.refreshToken } : anonymous ? {returnSecureToken:true} : { email:c.email, password, returnSecureToken:true };
     const json = await (await request(url,{method:'POST',headers:{'Content-Type':refresh ? 'application/x-www-form-urlencoded' : 'application/json'},body:refresh ? new URLSearchParams({grant_type:'refresh_token',refresh_token:c.refreshToken!}).toString() : JSON.stringify(body)})).json();
     return { ...c, token:json.idToken ?? json.id_token, refreshToken:json.refreshToken ?? json.refresh_token, expiresAt:Date.now() + Number(json.expiresIn ?? json.expires_in) * 1000 };
   }
@@ -23,9 +29,13 @@ export async function authenticate(input: Connection, password?: string): Promis
 export interface CloudAdapter { head(): Promise<string | null>; read(): Promise<unknown | null>; write(value: CloudSnapshot, expectedHash: string | null): Promise<void> }
 export function createAdapter(c: Connection): CloudAdapter {
   if (c.provider === 'supabase') {
-    const headers = {apikey:c.apiKey,Authorization:`Bearer ${c.token}`,'Content-Type':'application/json'};
+    const keyMode=authMode(c)==='sync-key';
+    const headers:Record<string,string> = {apikey:c.apiKey,'Content-Type':'application/json'};
+    if (!keyMode) headers.Authorization=`Bearer ${c.token}`;
     async function rpc(name: string, body: unknown) { return (await request(`${c.endpoint}/rest/v1/rpc/${name}`, {method:'POST',headers,body:JSON.stringify(body)})).json(); }
-    return { async head() { return rpc('planner_head',{p_data_id:c.dataId}); }, async read() { return rpc('planner_read',{p_data_id:c.dataId}); }, async write(value,expectedHash) { if (!await rpc('planner_write',{p_data_id:c.dataId,p_snapshot:value,p_expected_hash:expectedHash})) throw new SyncConflict(); } };
+    const params=keyMode ? {p_data_id:c.dataId,p_sync_key:c.syncKey} : {p_data_id:c.dataId};
+    const prefix=keyMode ? 'planner_key_' : 'planner_';
+    return { async head() { return rpc(prefix+'head',params); }, async read() { return rpc(prefix+'read',params); }, async write(value,expectedHash) { if (!await rpc(prefix+'write',{...params,p_snapshot:value,p_expected_hash:expectedHash})) throw new SyncConflict(); } };
   }
   let uid: string;
   try { uid = JSON.parse(atob(c.token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).sub; if (!uid) throw new Error(); } catch { throw new Error('Firebase session is invalid. Reconnect to sign in again.'); }
