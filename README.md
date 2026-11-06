@@ -3,7 +3,8 @@
 A mobile-first React + TypeScript PWA for personal targets and intentional purchases. No account or backend; plans stay in localStorage on the current browser/device.
 
 
-<iframe src="https://vkrypto.github.io/goal-planner/" />
+[Open Interactive Demo](https://username.github.io/repo/)
+---
 ## Run
 
 ```sh
