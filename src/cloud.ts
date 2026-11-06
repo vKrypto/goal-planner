@@ -1,9 +1,10 @@
 import { SyncConflict, authMode, validateConnection, type Connection, type CloudSnapshot } from './sync-core';
 const TIMEOUT = 15000;
+export class SchemaMissingError extends Error { constructor() { super('Cloud database setup was not found. Run the setup SQL once, then connect again.'); this.name='SchemaMissingError'; } }
 async function request(url: string, init: RequestInit = {}) {
   const response = await fetch(url, { ...init, cache: 'no-store', signal: AbortSignal.timeout(TIMEOUT), referrerPolicy: 'no-referrer' });
   if ([409,412].includes(response.status)) throw new SyncConflict();
-  if (response.status===404) throw new Error('Cloud setup is missing. Open First-time setup and run the SQL for your selected connection method.');
+  if (response.status===404) throw new SchemaMissingError();
   if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? 'Cloud access denied. Check your credentials and database permissions.' : `Cloud request failed (${response.status}). Check the endpoint and provider setup.`);
   return response;
 }
