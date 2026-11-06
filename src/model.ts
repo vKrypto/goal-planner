@@ -1,7 +1,7 @@
 export type Currency = 'INR' | 'USD' | 'EUR' | 'GBP' | 'JPY';
 export type BaseItem = { id: string; status: 'active' | 'completed'; notes: string; photo?: string; createdAt: string; updatedAt: string; completedAt?: string };
 export type Target = BaseItem & { type: 'target'; title: string; description: string; targetDate: string; reminder: boolean };
-export type Purchase = BaseItem & { type: 'purchase'; name: string; link: string; pricingMode: 'exact' | 'range'; price: number; minimum: number; maximum: number; quantity: number; purchaseDate: string };
+export type Purchase = BaseItem & { type: 'purchase'; name: string; link: string; pricingMode: 'exact' | 'range'; price: number; minimum: number; maximum: number; quantity: number; purchaseDate: string; category?: string };
 export type Item = Target | Purchase;
 export type Data = { schemaVersion: 1; settings: { currency: Currency }; items: Item[] };
 export const KEY = 'target-planner.v1';
@@ -70,13 +70,13 @@ export function validateData(value: unknown): Data {
     if (item.completedAt !== undefined && (!str(item.completedAt, 40) || !Number.isFinite(Date.parse(item.completedAt)))) return fail();
     if (item.photo !== undefined && (!str(item.photo, 180000) || !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(item.photo))) return fail();
     if (item.type === 'target') { if (!str(item.title, 120) || !item.title.trim() || !str(item.description, 1000) || !str(item.targetDate, 10) || !validDate(item.targetDate) || typeof item.reminder !== 'boolean') return fail(); }
-    else if (item.type === 'purchase') { if (!str(item.name, 120) || !item.name.trim() || !str(item.link, 2000) || (item.link && !safeLink(item.link)) || !['exact', 'range'].includes(item.pricingMode) || !amount(item.price) || !amount(item.minimum) || !amount(item.maximum) || item.minimum > item.maximum || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 9999 || !Number.isSafeInteger(Math.max(item.price, item.maximum) * item.quantity) || !str(item.purchaseDate, 10) || (item.purchaseDate && !validFlexDate(item.purchaseDate))) return fail(); }
+    else if (item.type === 'purchase') { if (!str(item.name, 120) || !item.name.trim() || !str(item.link, 2000) || (item.link && !safeLink(item.link)) || !['exact', 'range'].includes(item.pricingMode) || !amount(item.price) || !amount(item.minimum) || !amount(item.maximum) || item.minimum > item.maximum || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 9999 || !Number.isSafeInteger(Math.max(item.price, item.maximum) * item.quantity) || !str(item.purchaseDate, 10) || (item.category !== undefined && !str(item.category, 40)) || (item.purchaseDate && !validFlexDate(item.purchaseDate))) return fail(); }
     else return fail();
   }
   // Reconstruct known fields; imported unknown properties never become application state.
   return { schemaVersion: 1, settings: { currency: root.settings.currency }, items: root.items.map(item => {
     const common = { id: item.id, status: item.status, notes: item.notes, photo: item.photo, createdAt: item.createdAt, updatedAt: item.updatedAt, completedAt: item.completedAt };
-    return item.type === 'target' ? { ...common, type: 'target', title: item.title, description: item.description, targetDate: item.targetDate, reminder: item.reminder } : { ...common, type: 'purchase', name: item.name, link: item.link, pricingMode: item.pricingMode, price: item.price, minimum: item.minimum, maximum: item.maximum, quantity: item.quantity, purchaseDate: item.purchaseDate };
+    return item.type === 'target' ? { ...common, type: 'target', title: item.title, description: item.description, targetDate: item.targetDate, reminder: item.reminder } : { ...common, type: 'purchase', name: item.name, link: item.link, pricingMode: item.pricingMode, price: item.price, minimum: item.minimum, maximum: item.maximum, quantity: item.quantity, purchaseDate: item.purchaseDate, category: item.category?.trim() || undefined };
   }) };
 }
 export function parseBackup(raw: string) { if (raw.length > MAX_BYTES) throw new Error('This backup is too large for local storage.'); try { return validateData(JSON.parse(raw)); } catch (error) { if (error instanceof SyntaxError) throw new Error('This file is not valid JSON. Your existing plans have not changed.'); throw error; } }

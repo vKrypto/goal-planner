@@ -51,3 +51,11 @@ testFlex('flexible purchase dates accept month and year, count to period end, an
   assertFlex.ok(isFutureDate('2026-11', '2026-11-06') && !isFutureDate('2026-10', '2026-11-06') && isFutureDate('2026', '2026-11-06') && !isFutureDate('2026-11-05', '2026-11-06'));
   assertFlex.equal(flexDisplay('2027'), '2027');
 });
+testFlex('purchase category is kept, trimmed, optional and length-limited', async () => {
+  const { validateData: v } = await import('../src/model.ts');
+  const base = { id: 'p1', type: 'purchase', status: 'active', notes: '', createdAt: '2026-11-06T00:00:00Z', updatedAt: '2026-11-06T00:00:00Z', name: 'RAM', link: '', pricingMode: 'exact', price: 100, minimum: 0, maximum: 0, quantity: 4, purchaseDate: '' };
+  const wrap = (item: object) => ({ schemaVersion: 1, settings: { currency: 'INR' }, items: [item] });
+  assertFlex.equal((v(wrap({ ...base, category: ' Tech ' })).items[0] as { category?: string }).category, 'Tech');
+  assertFlex.equal((v(wrap(base)).items[0] as { category?: string }).category, undefined);
+  assertFlex.throws(() => v(wrap({ ...base, category: 'x'.repeat(41) })));
+});
