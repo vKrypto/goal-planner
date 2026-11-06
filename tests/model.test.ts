@@ -41,3 +41,13 @@ test('purchase import rejects inverted ranges, unsafe links and invalid quantiti
  assert.equal(validateData({ ...emptyData(), items: [purchase] }).items.length, 1);
  for (const change of [{ minimum: 20000 }, { quantity: 0 }, { quantity: 1.2 }, { link: 'data:text/html,bad' }, { price: 0.1 }]) assert.throws(() => validateData({ ...emptyData(), items: [{ ...purchase, ...change }] }));
 });
+import { dateEnd, dueLabel as flexDue, validFlexDate, isFutureDate, displayDate as flexDisplay } from '../src/model.ts';
+import assertFlex from 'node:assert/strict';
+import testFlex from 'node:test';
+testFlex('flexible purchase dates accept month and year, count to period end, and must be in the future', () => {
+  assertFlex.ok(validFlexDate('2027') && validFlexDate('2027-03') && validFlexDate('2027-03-04') && !validFlexDate('2027-13'));
+  assertFlex.equal(dateEnd('2028-02'), '2028-02-29'); assertFlex.equal(dateEnd('2027'), '2027-12-31');
+  assertFlex.equal(flexDue('2026-11', '2026-11-06'), 'This month'); assertFlex.equal(flexDue('2027-01', '2026-11-06'), 'In 2 months'); assertFlex.equal(flexDue('2027', '2026-11-06'), 'Next year');
+  assertFlex.ok(isFutureDate('2026-11', '2026-11-06') && !isFutureDate('2026-10', '2026-11-06') && isFutureDate('2026', '2026-11-06') && !isFutureDate('2026-11-05', '2026-11-06'));
+  assertFlex.equal(flexDisplay('2027'), '2027');
+});

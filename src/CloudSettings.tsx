@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Cloud, RefreshCw, Unplug } from 'lucide-react';
+import { Check, Cloud, Copy, RefreshCw, Unplug } from 'lucide-react';
 import { type CloudSync } from './useCloudSync';
 import accountSQL from '../deploy/supabase.sql?raw';
 import keySQL from '../deploy/supabase-sync-key.sql?raw';
@@ -18,7 +18,7 @@ export function CloudSettings({cloud}:{cloud:CloudSync}) {
   const [syncKey,setSyncKey]=useState(cloud.connection?.syncKey ?? '');
   const [setupMessage,setSetupMessage]=useState('');
   const [email,setEmail]=useState(cloud.connection?.email ?? ''); const [password,setPassword]=useState(''); const [busy,setBusy]=useState(false); const [error,setError]=useState('');
-  const [schemaMissing,setSchemaMissing]=useState(false);
+  const [schemaMissing,setSchemaMissing]=useState(false); const [keyCopied,setKeyCopied]=useState(false);
   const [choice,setChoice]=useState<'local'|'cloud'>();
   async function connect() {
     setBusy(true); setError(''); setSchemaMissing(false);
@@ -41,10 +41,22 @@ export function CloudSettings({cloud}:{cloud:CloudSync}) {
     {(editing || !cloud.connection) && <div className="cloud-form">
       <label>Storage provider<select aria-label="Storage provider" value={provider} onChange={e=>{const next=e.target.value as Provider;setProvider(next);setMethod(next==='supabase'?'sync-key':'anonymous');setEndpoint('');setApiKey('');setPassword('');setSetupMessage('');}}><option value="firebase">Firebase Realtime Database</option><option value="supabase">Supabase</option></select></label>
       <p>{examples[provider].detail}</p>
+      <details className="connection-details"><summary>Where do I find these values?</summary><div>{provider==='supabase'?<ol>
+        <li><strong>Project URL:</strong> Supabase dashboard → your project → Project Settings → Data API (or the Connect button). Looks like <code>https://abcd1234.supabase.co</code>.</li>
+        <li><strong>Publishable / anon key:</strong> Project Settings → API Keys. Copy the <em>publishable</em> key (<code>sb_publishable_…</code>) or the legacy <em>anon</em> key. Never use the secret / service_role key.</li>
+        <li><strong>Data ID:</strong> any name for this plan set (8–100 letters, numbers, - or _). Use the same one on every device.</li>
+        <li><strong>Private sync key:</strong> nothing to fetch. On your first device click <em>Generate key</em>, then <em>Copy</em> and save it somewhere safe (e.g. a password manager). On other devices paste that same key. Anyone with the key can read and edit these plans, and it can’t be recovered if lost.</li>
+        <li><strong>First time only:</strong> run the setup SQL once in the Supabase SQL editor. Connect will tell you if it’s missing.</li>
+      </ol>:<ol>
+        <li><strong>Database URL:</strong> Firebase console → Build → Realtime Database. Copy the URL at the top of the Data tab, e.g. <code>https://your-project-default-rtdb.firebaseio.com</code>.</li>
+        <li><strong>Web API key:</strong> Project settings (gear icon) → General → Your apps → Web app config → <code>apiKey</code> (<code>AIza…</code>). Add a Web app first if none exists.</li>
+        <li><strong>Data ID:</strong> any name for this plan set (8–100 letters, numbers, - or _).</li>
+        <li><strong>Anonymous access:</strong> Authentication → Sign-in method → enable Anonymous, then paste the database rules once under Realtime Database → Rules.</li>
+      </ol>}</div></details>
       <label>{provider==='firebase'?'Database URL':'Project URL'}<input type="url" autoComplete="off" placeholder={examples[provider].endpoint} value={endpoint} onChange={e=>setEndpoint(e.target.value)}/></label>
       <label>{provider==='firebase'?'Firebase Web API key':'Publishable / anon key'}<input autoComplete="off" placeholder={examples[provider].key} value={apiKey} onChange={e=>setApiKey(e.target.value)}/></label>
       <label>Data ID<div className="data-id-input"><input aria-label="Data ID" autoComplete="off" placeholder="e.g. my-personal-targets" value={dataId} onChange={e=>setDataId(e.target.value)}/><button className="secondary" onClick={()=>setDataId(crypto.randomUUID())}>Generate</button></div></label>
-      {method==='sync-key' && <><label>Private sync key<div className="data-id-input"><input aria-label="Private sync key" type="password" autoComplete="new-password" placeholder="Generate or paste your other device’s key" value={syncKey} onChange={e=>setSyncKey(e.target.value)}/><button className="secondary" onClick={()=>setSyncKey(generateSyncKey())}>Generate key</button></div></label><div className="backup-buttons"><button className="text-button" disabled={!syncKey} onClick={()=>{navigator.clipboard.writeText(syncKey).then(()=>setError('')).catch(()=>setError('Clipboard unavailable. Select and copy the key manually.'));}}>Copy private key</button></div><p>No login needed. Use this same key and Data ID on your other devices; keep a private copy (it is not in plan backups).</p></>}
+      {method==='sync-key' && <><label>Private sync key<div className="data-id-input"><input aria-label="Private sync key" type="password" autoComplete="new-password" placeholder="Generate or paste your other device’s key" value={syncKey} onChange={e=>{setSyncKey(e.target.value);setKeyCopied(false);}}/><button type="button" className="secondary" disabled={!syncKey} aria-label="Copy private sync key" title="Copy to clipboard" onClick={()=>{navigator.clipboard.writeText(syncKey).then(()=>{setKeyCopied(true);setError('');setTimeout(()=>setKeyCopied(false),2000);}).catch(()=>setError('Clipboard unavailable. Select and copy the key manually.'));}}>{keyCopied?<><Check size={14}/>Copied</>:<><Copy size={14}/>Copy</>}</button><button type="button" className="secondary" onClick={()=>{setSyncKey(generateSyncKey());setKeyCopied(false);}}>Generate key</button></div></label><p>No login needed. Use this same key and Data ID on your other devices; keep a private copy (it is not in plan backups).</p></>}
       {method==='anonymous' && <p>No login needed. Firebase creates an anonymous identity for this browser.</p>}
       {schemaMissing && <div className="sync-conflict" role="alert"><strong>First-time setup needed</strong><p>Connected, but the database schema isn’t there yet. This is a one-time step:</p><ol><li>Sign in to your {examples[provider].label} dashboard with your email/password.</li><li>{provider==='supabase'?<>Open the <a href={sqlEditor} target="_blank" rel="noopener noreferrer">SQL editor</a>, paste the setup SQL and click Run.</>:<>Open Realtime Database → Rules and paste the rules.</>}</li><li>Come back and connect again.</li></ol><div className="backup-buttons"><button className="secondary" onClick={copySetup}>Copy {provider==='firebase'?'rules':'setup SQL'}</button><a className="secondary" href={githubLink} target="_blank" rel="noopener noreferrer">View on GitHub</a><button className="primary" disabled={busy} onClick={()=>{void connect();}}>I’ve run it · retry</button></div>{setupMessage && <p role="status">{setupMessage}</p>}<p className="inline-note">Your dashboard password is only used on the provider’s site; it is never entered here.</p></div>}
       <details className="connection-details"><summary>Other ways to connect · optional</summary><div>

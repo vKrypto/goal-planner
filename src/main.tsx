@@ -1,12 +1,36 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowDownToLine, ArrowUpFromLine, ArrowUpRight, Bell, CalendarDays, Check, CheckCheck, ChevronDown, Circle, CircleCheck, Compass, Flag, ImagePlus, Leaf, Link, MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, ShoppingBag, Sparkles, Target as TargetIcon, Trash2, WifiOff, X } from 'lucide-react';
-import { type Data, type Item, type Target, type Currency, KEY, MAX_BYTES, compressPhoto, dateOf, daysUntil, displayDate, dueLabel, emptyData, loadData, money, parseBackup, precision, priceLabel, safeLink, saveData, titleOf, todayString, toMinor, validDate } from './model';
+import { type Data, type Item, type Target, type Currency, KEY, MAX_BYTES, compressPhoto, dateOf, daysUntil, displayDate, dueLabel, emptyData, loadData, money, parseBackup, precision, priceLabel, safeLink, saveData, titleOf, todayString, toMinor, validDate, validFlexDate, isFutureDate, datePrecision, minFlexDate, dateEnd, type DatePrecision } from './model';
 import './styles.css';
 import { useCloudSync } from './useCloudSync';
 import { CloudSettings } from './CloudSettings';
 
 type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+const MONTHS = Array.from({ length: 12 }, (_, i) => new Intl.DateTimeFormat(undefined, { month: 'long' }).format(new Date(2000, i, 1)));
+function PurchaseDate({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [precision, setPrecision] = useState<DatePrecision | 'any'>(value ? datePrecision(value) : 'any');
+  const today = todayString(); const thisYear = Number(today.slice(0, 4)); const thisMonth = Number(today.slice(5, 7));
+  const years = Array.from({ length: 11 }, (_, i) => String(thisYear + i));
+  if (value && !years.includes(value.slice(0, 4))) years.unshift(value.slice(0, 4));
+  const year = value.slice(0, 4) || String(thisYear);
+  const pick = (next: DatePrecision | 'any') => {
+    setPrecision(next);
+    if (next === 'any') return onChange('');
+    const min = minFlexDate(next, today);
+    if (next === 'year') onChange(value ? value.slice(0, 4) : min);
+    else if (next === 'month') onChange(value.length >= 7 ? value.slice(0, 7) : value ? (value.slice(0, 4) === min.slice(0, 4) ? min : `${value}-01`) : min);
+    else onChange(value.length === 10 ? value : '');
+  };
+  return <div className="flex-date"><span className="field-label">Purchase date<span className="optional">optional</span></span>
+    <div className="segmented pricing" role="group" aria-label="Purchase date precision">{([['day', 'Exact day'], ['month', 'Month'], ['year', 'Year'], ['any', 'Anytime']] as const).map(([v, label]) => <button key={v} type="button" aria-pressed={precision === v} className={precision === v ? 'selected' : ''} onClick={() => pick(v)}>{label}</button>)}</div>
+    {precision === 'day' && <input type="date" aria-label="Purchase day" min={today} max="9999-12-31" value={value} onChange={e => onChange(e.target.value)}/>}
+    {precision === 'month' && <div className="form-row"><select aria-label="Purchase month" value={value.slice(5, 7)} onChange={e => onChange(`${year}-${e.target.value}`)}>{MONTHS.map((m, i) => { const mm = String(i + 1).padStart(2, '0'); return <option key={mm} value={mm} disabled={Number(year) === thisYear && i + 1 < thisMonth}>{m}</option>; })}</select><select aria-label="Purchase year" value={year} onChange={e => { const y = e.target.value; const mm = y === String(thisYear) && Number(value.slice(5, 7)) < thisMonth ? String(thisMonth).padStart(2, '0') : value.slice(5, 7) || '01'; onChange(`${y}-${mm}`); }}>{years.map(y => <option key={y}>{y}</option>)}</select></div>}
+    {precision === 'year' && <select aria-label="Purchase year" value={year} onChange={e => onChange(e.target.value)}>{years.map(y => <option key={y}>{y}</option>)}</select>}
+    {precision === 'any' && <p className="inline-note">No deadline — buy it whenever you’re ready.</p>}
+  </div>;
+}
+
 function Modal({ title, subtitle, children, close, wide = false }: { title: string; subtitle?: string; children: React.ReactNode; close: () => void; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null); const closeRef = useRef(close); closeRef.current = close;
   useEffect(() => { const dialog = ref.current!; dialog.showModal(); const cancel = (event: Event) => { event.preventDefault(); closeRef.current(); }; dialog.addEventListener('cancel', cancel); return () => { dialog.removeEventListener('cancel', cancel); dialog.close(); }; }, []);
@@ -27,7 +51,11 @@ function ItemForm({ item, type, currency, close, save }: { item?: Item; type: It
     event.preventDefault(); setError('');
     try {
       if (!name.trim()) throw new Error('Give your plan a name.');
-      if ((type === 'target' || date) && !validDate(date)) throw new Error('Choose a valid calendar date between 1900 and 9999.');
+      if (type === 'target' && !validDate(date)) throw new Error('Choose a valid calendar date between 1900 and 9999.');
+      if (type === 'purchase' && date) {
+        if (!validFlexDate(date)) throw new Error('Choose a valid purchase date, month, or year.');
+        if (date !== (item ? dateOf(item) : '') && !isFutureDate(date)) throw new Error('Pick a purchase date from today onward.');
+      }
       const timestamp = new Date().toISOString();
       const common = { id: item?.id ?? crypto.randomUUID(), status: item?.status ?? 'active' as const, notes: notes.trim(), photo, createdAt: item?.createdAt ?? timestamp, updatedAt: timestamp, completedAt: item?.completedAt };
       let result: Item;
@@ -46,7 +74,7 @@ function ItemForm({ item, type, currency, close, save }: { item?: Item; type: It
   return <Modal title={item ? 'A little fine-tuning' : type === 'target' ? 'What are you working toward?' : 'Something worth planning for'} subtitle={type === 'target' ? 'Big or small, every target starts here.' : 'Make a little space for your next purchase.'} close={close} wide><form onSubmit={submit}>
     <div className="form-body"><label>{type === 'target' ? 'Target title' : 'Purchase name'}<input autoFocus required maxLength={120} placeholder={type === 'target' ? 'e.g. Run my first 5K' : 'e.g. A new reading chair'} value={name} onChange={e => setName(e.target.value)}/></label>
     {type === 'purchase' && <><div className="segmented pricing"><button type="button" aria-pressed={mode === 'exact'} className={mode === 'exact' ? 'selected' : ''} onClick={() => setMode('exact')}>Exact price</button><button type="button" aria-pressed={mode === 'range'} className={mode === 'range' ? 'selected' : ''} onClick={() => setMode('range')}>Price range</button></div><div className="form-row">{mode === 'exact' ? <label>Unit price ({currency})<input required inputMode="decimal" placeholder="0.00" value={price} onChange={e => setPrice(e.target.value)}/></label> : <><label>Minimum ({currency})<input required inputMode="decimal" placeholder="0.00" value={minimum} onChange={e => setMinimum(e.target.value)}/></label><label>Maximum ({currency})<input required inputMode="decimal" placeholder="0.00" value={maximum} onChange={e => setMaximum(e.target.value)}/></label></>}<label className="quantity">Quantity<input type="number" min="1" max="9999" required value={quantity} onChange={e => setQuantity(e.target.value)}/></label></div></>}
-    <label>{type === 'target' ? 'Target date' : 'Purchase date'}{type === 'purchase' && <span className="optional">optional</span>}<input type="date" min="1900-01-01" max="9999-12-31" required={type === 'target'} value={date} onChange={e => setDate(e.target.value)}/></label>
+    {type === 'target' ? <label>Target date<input type="date" min="1900-01-01" max="9999-12-31" required value={date} onChange={e => setDate(e.target.value)}/></label> : <PurchaseDate value={date} onChange={setDate}/>}
     <button type="button" className="details-toggle" aria-expanded={details} onClick={() => setDetails(!details)}><Plus size={16}/> {details ? 'Hide' : 'Add'} optional details <ChevronDown size={16} className={details ? 'rotated' : ''}/></button>
     {details && <div className="optional-fields">{type === 'target' ? <label>Description<textarea rows={2} maxLength={1000} placeholder="Why does this matter to you?" value={description} onChange={e => setDescription(e.target.value)}/></label> : <label>Product link<input type="url" maxLength={2000} placeholder="https://…" value={link} onChange={e => setLink(e.target.value)}/></label>}<label>Notes<textarea rows={3} maxLength={10000} placeholder="Ideas, next steps, little reminders…" value={notes} onChange={e => setNotes(e.target.value)}/></label>
     <div className="photo-field">{photo ? <><img src={photo} alt="Plan attachment"/><button type="button" className="text-button" onClick={() => setPhoto(undefined)}>Remove photo</button></> : <label className="upload-label"><ImagePlus size={21}/><span>{busy ? 'Preparing photo…' : 'Add a photo'}<small>JPEG, PNG or WebP · up to 15 MB</small></span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={e => { void upload(e.target.files?.[0]); e.target.value = ''; }}/></label>}</div>
@@ -89,7 +117,7 @@ function App() {
     if (a.type === 'purchase' && b.type === 'purchase' && a.status !== b.status) return a.status === 'active' ? -1 : 1;
     if (sort === 'newest') return b.createdAt.localeCompare(a.createdAt);
     if (sort === 'price' && a.type === 'purchase' && b.type === 'purchase') return (a.pricingMode === 'exact' ? a.price : a.minimum) * a.quantity - (b.pricingMode === 'exact' ? b.price : b.minimum) * b.quantity;
-    return (dateOf(a) || '9999-99-99').localeCompare(dateOf(b) || '9999-99-99') || b.createdAt.localeCompare(a.createdAt);
+    return (dateOf(a) ? dateEnd(dateOf(a)) : '9999-99-99').localeCompare(dateOf(b) ? dateEnd(dateOf(b)) : '9999-99-99') || b.createdAt.localeCompare(a.createdAt);
   });
   const progress = currentItems.length ? Math.round(completed.length / currentItems.length * 100) : 0;
   let used = JSON.stringify(data).length * 2; try { if (blocked) used = (localStorage.getItem(KEY)?.length ?? 0) * 2; } catch { /* unavailable storage is already reported */ }

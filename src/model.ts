@@ -16,10 +16,41 @@ export function validDate(value: string): boolean {
   const date = new Date(0); date.setUTCHours(0, 0, 0, 0); date.setUTCFullYear(y, m - 1, d);
   return y >= 1900 && y <= 9999 && date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
 }
-function dayNumber(value: string) { const [y, m, d] = value.split('-').map(Number); return Date.UTC(y, m - 1, d) / 86400000; }
+export type DatePrecision = 'day' | 'month' | 'year';
+export const datePrecision = (value: string): DatePrecision => value.length === 4 ? 'year' : value.length === 7 ? 'month' : 'day';
+/** Purchase dates may be a day (YYYY-MM-DD), a month (YYYY-MM) or a year (YYYY). */
+export function validFlexDate(value: string): boolean {
+  if (/^\d{4}$/.test(value)) return validDate(`${value}-01-01`);
+  if (/^\d{4}-\d{2}$/.test(value)) return validDate(`${value}-01`);
+  return validDate(value);
+}
+/** Last calendar day covered by a flexible date, so "Dec 2026" counts down to 31 Dec. */
+export function dateEnd(value: string) {
+  const p = datePrecision(value); if (p === 'day') return value;
+  const [y, m] = value.split('-').map(Number); const month = p === 'year' ? 12 : m;
+  return `${String(y).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(new Date(Date.UTC(y, month, 0)).getUTCDate()).padStart(2, '0')}`;
+}
+/** Smallest allowed value at each precision: today, this month, this year. */
+export function minFlexDate(precision: DatePrecision, today = todayString()) { return precision === 'year' ? today.slice(0, 4) : precision === 'month' ? today.slice(0, 7) : today; }
+export const isFutureDate = (value: string, today = todayString()) => value >= minFlexDate(datePrecision(value), today);
+function dayNumber(value: string) { const [y, m, d] = dateEnd(value).split('-').map(Number); return Date.UTC(y, m - 1, d) / 86400000; }
 export const daysUntil = (value: string, today = todayString()) => dayNumber(value) - dayNumber(today);
-export function dueLabel(date: string) { if (!date) return 'Whenever you’re ready'; const days = daysUntil(date); return days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : days === 1 ? 'Tomorrow' : `${days} days to go`; }
-export function displayDate(value: string) { if (!value) return 'No date set'; return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`)); }
+export function dueLabel(date: string, today = todayString()) {
+  if (!date) return 'Whenever you’re ready';
+  const p = datePrecision(date);
+  if (p !== 'day' && daysUntil(date, today) >= 0) {
+    const months = p === 'year' ? Number(date) - Number(today.slice(0, 4)) : (Number(date.slice(0, 4)) - Number(today.slice(0, 4))) * 12 + Number(date.slice(5, 7)) - Number(today.slice(5, 7));
+    if (p === 'year') return months === 0 ? 'This year' : months === 1 ? 'Next year' : `In ${months} years`;
+    return months === 0 ? 'This month' : months === 1 ? 'Next month' : `In ${months} months`;
+  }
+  const days = daysUntil(date); return days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : days === 1 ? 'Tomorrow' : `${days} days to go`;
+}
+export function displayDate(value: string) {
+  if (!value) return 'No date set';
+  const p = datePrecision(value);
+  if (p === 'year') return value;
+  if (p === 'month') return new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric' }).format(new Date(`${value}-01T12:00:00`));
+  return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`)); }
 export const precision = (currency: Currency) => currency === 'JPY' ? 0 : 2;
 export function toMinor(value: string, currency: Currency) { const number = Number(value); const digits = precision(currency); if (!value.trim() || !Number.isFinite(number) || number < 0 || !/^\d+(\.\d+)?$/.test(value) || (value.split('.')[1]?.length ?? 0) > digits) throw new Error(`Enter a valid amount with up to ${digits} decimal places.`); const amount = Math.round(number * 10 ** digits); if (!Number.isSafeInteger(amount) || amount > 1e12) throw new Error('That amount is too large.'); return amount; }
 export const money = (value: number, currency: Currency) => new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: precision(currency) }).format(value / 10 ** precision(currency));
@@ -39,7 +70,7 @@ export function validateData(value: unknown): Data {
     if (item.completedAt !== undefined && (!str(item.completedAt, 40) || !Number.isFinite(Date.parse(item.completedAt)))) return fail();
     if (item.photo !== undefined && (!str(item.photo, 180000) || !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(item.photo))) return fail();
     if (item.type === 'target') { if (!str(item.title, 120) || !item.title.trim() || !str(item.description, 1000) || !str(item.targetDate, 10) || !validDate(item.targetDate) || typeof item.reminder !== 'boolean') return fail(); }
-    else if (item.type === 'purchase') { if (!str(item.name, 120) || !item.name.trim() || !str(item.link, 2000) || (item.link && !safeLink(item.link)) || !['exact', 'range'].includes(item.pricingMode) || !amount(item.price) || !amount(item.minimum) || !amount(item.maximum) || item.minimum > item.maximum || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 9999 || !Number.isSafeInteger(Math.max(item.price, item.maximum) * item.quantity) || !str(item.purchaseDate, 10) || (item.purchaseDate && !validDate(item.purchaseDate))) return fail(); }
+    else if (item.type === 'purchase') { if (!str(item.name, 120) || !item.name.trim() || !str(item.link, 2000) || (item.link && !safeLink(item.link)) || !['exact', 'range'].includes(item.pricingMode) || !amount(item.price) || !amount(item.minimum) || !amount(item.maximum) || item.minimum > item.maximum || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 9999 || !Number.isSafeInteger(Math.max(item.price, item.maximum) * item.quantity) || !str(item.purchaseDate, 10) || (item.purchaseDate && !validFlexDate(item.purchaseDate))) return fail(); }
     else return fail();
   }
   // Reconstruct known fields; imported unknown properties never become application state.
