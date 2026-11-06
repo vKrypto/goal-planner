@@ -6,13 +6,14 @@ import keySQL from '../deploy/supabase-sync-key.sql?raw';
 import firebaseRules from '../deploy/firebase.rules.json?raw';
 import { SchemaMissingError } from './cloud';
 import { authMode, generateSyncKey, type AuthMode, type Provider, type Connection } from './sync-core';
+const DEFAULT_SUPABASE_URL = 'https://bijiazhgrxzsyjmdxqoe.supabase.co';
 const examples = {
   firebase: { label:'Firebase',endpoint:'https://your-project-default-rtdb.firebaseio.com',key:'AIza… (Firebase Web API key)',detail:'Use a Realtime Database URL and an Firebase Auth identity. Choose anonymous access or optional account sign-in.' },
   supabase: { label:'Supabase',endpoint:'https://your-project.supabase.co',key:'sb_publishable_… (or anon key)',detail:'Use a project URL, publishable/anon key. Choose a private sync key or optional account sign-in.' }
 };
 export function CloudSettings({cloud}:{cloud:CloudSync}) {
   const [editing,setEditing]=useState(!cloud.connection); const [provider,setProvider]=useState<Provider>(cloud.connection?.provider ?? 'supabase');
-  const [endpoint,setEndpoint]=useState(cloud.connection?.endpoint ?? ''); const [dataId,setDataId]=useState(cloud.connection?.dataId ?? 'target-planner-personal');
+  const [endpoint,setEndpoint]=useState(cloud.connection?.endpoint ?? DEFAULT_SUPABASE_URL); const [dataId,setDataId]=useState(cloud.connection?.dataId ?? 'target-planner-personal');
   const [apiKey,setApiKey]=useState(cloud.connection?.apiKey ?? '');
   const [method,setMethod]=useState<AuthMode>(cloud.connection ? authMode(cloud.connection) : 'sync-key');
   const [syncKey,setSyncKey]=useState(cloud.connection?.syncKey ?? '');
@@ -39,7 +40,7 @@ export function CloudSettings({cloud}:{cloud:CloudSync}) {
     {cloud.connection && <div className="cloud-status"><strong>{examples[cloud.connection.provider].label} · {cloud.connection.dataId}</strong><span role="status">{cloud.status || 'Connected'}</span>{cloud.error && <p className="error" role="alert">{cloud.error}</p>}<div className="backup-buttons"><button className="secondary" disabled={cloud.busy} onClick={()=>{void cloud.sync();}}><RefreshCw size={14}/>{cloud.busy ? 'Syncing…':'Sync now'}</button><button className="secondary" disabled={cloud.busy} onClick={()=>setEditing(!editing)}>Edit connection</button><button className="text-button" disabled={cloud.busy} onClick={()=>{try{cloud.disconnect();setEditing(true);setPassword('');setError('');}catch(e){setError((e as Error).message);}}}><Unplug size={14}/>Disconnect</button></div></div>}
     {cloud.conflict && <div className="sync-conflict"><strong>Both versions have changed</strong><p>Automatic sync is paused. Download a backup before replacing either version. Your choice applies to the entire dataset, including deleted plans, notes, and photos.</p>{choice ? <><p>{choice==='local'?'Replace cloud plans with all plans on this device? Other devices will receive this version.':'Replace all plans on this device with the cloud version?'}</p><div className="backup-buttons"><button className="secondary" disabled={cloud.busy} onClick={()=>setChoice(undefined)}>Cancel</button><button className="primary" disabled={cloud.busy} onClick={()=>{void cloud.sync(choice);setChoice(undefined);}}>Confirm replacement</button></div></> : <div className="backup-buttons"><button className="secondary" onClick={()=>setChoice('local')}>Use this device’s version</button><button className="secondary" onClick={()=>setChoice('cloud')}>Use cloud version</button></div>}</div>}
     {(editing || !cloud.connection) && <div className="cloud-form">
-      <label>Storage provider<select aria-label="Storage provider" value={provider} onChange={e=>{const next=e.target.value as Provider;setProvider(next);setMethod(next==='supabase'?'sync-key':'anonymous');setEndpoint('');setApiKey('');setPassword('');setSetupMessage('');}}><option value="firebase">Firebase Realtime Database</option><option value="supabase">Supabase</option></select></label>
+      <label>Storage provider<select aria-label="Storage provider" value={provider} onChange={e=>{const next=e.target.value as Provider;setProvider(next);setMethod(next==='supabase'?'sync-key':'anonymous');setEndpoint(next==='supabase'?DEFAULT_SUPABASE_URL:'');setApiKey('');setPassword('');setSetupMessage('');}}><option value="firebase">Firebase Realtime Database</option><option value="supabase">Supabase</option></select></label>
       <p>{examples[provider].detail}</p>
       <details className="connection-details"><summary>Where do I find these values?</summary><div>{provider==='supabase'?<ol>
         <li><strong>Project URL:</strong> Supabase dashboard → your project → Project Settings → Data API (or the Connect button). Looks like <code>https://abcd1234.supabase.co</code>.</li>
