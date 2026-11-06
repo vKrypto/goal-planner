@@ -1,0 +1,28 @@
+{
+  "name": "target-planner",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build && node scripts/finalize-pwa.mjs",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --import tsx tests/model.test.ts",
+    "test:smoke": "node tests/smoke.mjs"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "lucide-react": "^0.468.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.5",
+    "tsx": "^4.19.2",
+    "@types/node": "^22.10.2",
+    "@playwright/test": "^1.49.1"
+  }
+}
