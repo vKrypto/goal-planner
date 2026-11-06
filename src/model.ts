@@ -2,13 +2,15 @@ export type Currency = 'INR' | 'USD' | 'EUR' | 'GBP' | 'JPY';
 export type BaseItem = { id: string; status: 'active' | 'completed'; notes: string; photo?: string; createdAt: string; updatedAt: string; completedAt?: string };
 export type Target = BaseItem & { type: 'target'; title: string; description: string; targetDate: string; reminder: boolean };
 export type Purchase = BaseItem & { type: 'purchase'; name: string; link: string; pricingMode: 'exact' | 'range'; price: number; minimum: number; maximum: number; quantity: number; purchaseDate: string; category?: string };
-export type Item = Target | Purchase;
+/** A bill or expense (e.g. a utility bill). status: active = unpaid, completed = paid. */
+export type Expense = BaseItem & { type: 'expense'; title: string; description: string; amount: number; expenseDate: string; category?: string };
+export type Item = Target | Purchase | Expense;
 export type Data = { schemaVersion: 1; settings: { currency: Currency }; items: Item[] };
 export const KEY = 'target-planner.v1';
 export const MAX_BYTES = 3_500_000;
 export const emptyData = (): Data => ({ schemaVersion: 1, settings: { currency: 'INR' }, items: [] });
-export const titleOf = (item: Item) => item.type === 'target' ? item.title : item.name;
-export const dateOf = (item: Item) => item.type === 'target' ? item.targetDate : item.purchaseDate;
+export const titleOf = (item: Item) => item.type === 'purchase' ? item.name : item.title;
+export const dateOf = (item: Item) => item.type === 'target' ? item.targetDate : item.type === 'expense' ? item.expenseDate : item.purchaseDate;
 export function todayString(now = new Date()) { return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`; }
 export function validDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -71,11 +73,13 @@ export function validateData(value: unknown): Data {
     if (item.photo !== undefined && (!str(item.photo, 180000) || !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(item.photo))) return fail();
     if (item.type === 'target') { if (!str(item.title, 120) || !item.title.trim() || !str(item.description, 1000) || !str(item.targetDate, 10) || !validDate(item.targetDate) || typeof item.reminder !== 'boolean') return fail(); }
     else if (item.type === 'purchase') { if (!str(item.name, 120) || !item.name.trim() || !str(item.link, 2000) || (item.link && !safeLink(item.link)) || !['exact', 'range'].includes(item.pricingMode) || !amount(item.price) || !amount(item.minimum) || !amount(item.maximum) || item.minimum > item.maximum || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 9999 || !Number.isSafeInteger(Math.max(item.price, item.maximum) * item.quantity) || !str(item.purchaseDate, 10) || (item.category !== undefined && !str(item.category, 40)) || (item.purchaseDate && !validFlexDate(item.purchaseDate))) return fail(); }
+    else if (item.type === 'expense') { if (!str(item.title, 120) || !item.title.trim() || !str(item.description, 1000) || !amount(item.amount) || !str(item.expenseDate, 10) || !validDate(item.expenseDate) || (item.category !== undefined && !str(item.category, 40))) return fail(); }
     else return fail();
   }
   // Reconstruct known fields; imported unknown properties never become application state.
   return { schemaVersion: 1, settings: { currency: root.settings.currency }, items: root.items.map(item => {
     const common = { id: item.id, status: item.status, notes: item.notes, photo: item.photo, createdAt: item.createdAt, updatedAt: item.updatedAt, completedAt: item.completedAt };
+    if (item.type === 'expense') return { ...common, type: 'expense', title: item.title, description: item.description, amount: item.amount, expenseDate: item.expenseDate, category: item.category?.trim() || undefined };
     return item.type === 'target' ? { ...common, type: 'target', title: item.title, description: item.description, targetDate: item.targetDate, reminder: item.reminder } : { ...common, type: 'purchase', name: item.name, link: item.link, pricingMode: item.pricingMode, price: item.price, minimum: item.minimum, maximum: item.maximum, quantity: item.quantity, purchaseDate: item.purchaseDate, category: item.category?.trim() || undefined };
   }) };
 }

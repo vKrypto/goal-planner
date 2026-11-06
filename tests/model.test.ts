@@ -59,3 +59,13 @@ testFlex('purchase category is kept, trimmed, optional and length-limited', asyn
   assertFlex.equal((v(wrap(base)).items[0] as { category?: string }).category, undefined);
   assertFlex.throws(() => v(wrap({ ...base, category: 'x'.repeat(41) })));
 });
+testFlex('expenses validate amount and a real date, keep category, and are titled/dated correctly', async () => {
+  const { validateData: v, titleOf, dateOf } = await import('../src/model.ts');
+  const e = { id: 'e1', type: 'expense', status: 'active', notes: '', createdAt: '2026-11-06T00:00:00Z', updatedAt: '2026-11-06T00:00:00Z', title: 'Electricity – Oct', description: 'Consumer #123', amount: 184050, expenseDate: '2026-10-28', category: 'Electricity' };
+  const wrap = (item: object) => ({ schemaVersion: 1, settings: { currency: 'INR' }, items: [item] });
+  const out = v(wrap(e)).items[0];
+  assertFlex.equal(titleOf(out), 'Electricity – Oct'); assertFlex.equal(dateOf(out), '2026-10-28');
+  assertFlex.throws(() => v(wrap({ ...e, expenseDate: '2026-10' })));
+  assertFlex.throws(() => v(wrap({ ...e, amount: -1 })));
+  assertFlex.throws(() => v(wrap({ ...e, title: ' ' })));
+});
