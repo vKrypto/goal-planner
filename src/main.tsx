@@ -128,7 +128,8 @@ function App() {
     const onOnline = () => setOffline(false); const onOffline = () => setOffline(true); const onInstall = (e: Event) => { e.preventDefault(); setInstallPrompt(e as InstallPrompt); };
     const onStorage = (e: StorageEvent) => { if (e.key === KEY || e.key === null) { setBlocked(true); setStorageError('Plans changed in another tab. Reload this page before making more changes to avoid overwriting them.'); } };
     window.addEventListener('online', onOnline); window.addEventListener('offline', onOffline); window.addEventListener('beforeinstallprompt', onInstall); window.addEventListener('storage', onStorage);
-    if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register('./sw.js').then(reg => {
+    if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(reg => {
+      void reg.update();
       if (reg.waiting) setUpdate(reg);
       reg.addEventListener('updatefound', () => { const worker = reg.installing; worker?.addEventListener('statechange', () => { if (worker.state === 'installed' && navigator.serviceWorker.controller) setUpdate(reg); }); });
     }).catch(() => setToast('Offline caching is unavailable. Your plans still save in this browser.'));
@@ -185,4 +186,14 @@ function App() {
   </>;
 }
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
+/** Shows a recovery screen instead of a blank page if rendering crashes. Plans in storage are untouched. */
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error?: Error }> {
+  state: { error?: Error } = {};
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (!this.state.error) return this.props.children;
+    const reset = (window as unknown as { __resetAppCache?: () => void }).__resetAppCache;
+    return <div className="crash"><h2>Something went wrong</h2><p>Your saved plans are safe on this device. Reloading usually fixes this; if not, clear the offline cache.</p><p className="crash-detail">{this.state.error.message}</p><div className="backup-buttons"><button className="secondary" onClick={() => location.reload()}>Reload</button><button className="primary" onClick={() => reset ? reset() : location.reload()}>Clear cache & reload</button></div></div>;
+  }
+}
+createRoot(document.getElementById('root')!).render(<React.StrictMode><ErrorBoundary><App/></ErrorBoundary></React.StrictMode>);
