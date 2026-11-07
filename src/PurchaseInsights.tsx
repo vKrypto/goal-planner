@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { type Currency, type Expense, type Purchase, money, dateEnd } from './model';
-import { categoryName, categoryStyle } from './categories';
+import { type Currency, type Expense, type Membership, type Purchase, money, dateEnd, monthlyCost, yearlyCost } from './model';
+import { categoryName, categoryStyle, membershipStyle } from './categories';
 
 /** Total for a purchase: exact price × qty, or the midpoint of a range × qty. */
 export const spendOf = (p: Purchase | Expense) => p.type === 'expense' ? p.amount : (p.pricingMode === 'exact' ? p.price : (p.minimum + p.maximum) / 2) * p.quantity;
@@ -30,5 +30,21 @@ export function PurchaseInsights({ items, currency }: { items: (Purchase | Expen
       <span className="bar-label">{Icon && <Icon size={13} style={{ color: s!.color }}/>}{view === 'category' ? key : monthLabel(key)}</span>
       <span className="bar-track" title={`${money(r.bought, currency)} ${doneLabel.toLowerCase()} · ${money(r.planned, currency)} ${openLabel.toLowerCase()}`}><span className="bar bought" style={{ width: `${r.bought / max * 100}%` }}/><span className="bar planned" style={{ width: `${r.planned / max * 100}%` }}/></span>
       <span className="bar-value">{compact(r.bought + r.planned, currency)}</span></li>; })}</ul>
+  </section>;
+}
+
+/** Active memberships: total per month and per year, plus each one's share (monthly-equivalent). */
+export function MembershipInsights({ items, currency }: { items: Membership[]; currency: Currency }) {
+  const active = items.filter(m => m.status === 'active');
+  if (!active.length) return null;
+  const perMonth = active.reduce((s, m) => s + monthlyCost(m), 0); const perYear = active.reduce((s, m) => s + yearlyCost(m), 0);
+  const list = [...active].sort((a, b) => yearlyCost(b) - yearlyCost(a)); const max = Math.max(1, ...list.map(yearlyCost));
+  return <section className="insights" aria-label="Membership costs">
+    <div className="insights-head"><div><span className="eyebrow">MEMBERSHIP COSTS</span><p><strong>{money(perMonth, currency)}</strong> a month · <strong>{money(perYear, currency)}</strong> a year across {active.length} active</p></div></div>
+    <div className="legend"><span><i className="swatch bought"/>Yearly cost</span><small>Monthly plans × 12</small></div>
+    <ul className="bars">{list.map(m => { const s = membershipStyle(m.title); const Icon = s.icon; return <li key={m.id}>
+      <span className="bar-label"><Icon size={13} style={{ color: s.color }}/>{m.title}</span>
+      <span className="bar-track" title={`${money(monthlyCost(m), currency)} a month · ${money(yearlyCost(m), currency)} a year`}><span className="bar bought" style={{ width: `${yearlyCost(m) / max * 100}%` }}/></span>
+      <span className="bar-value">{compact(yearlyCost(m), currency)}</span></li>; })}</ul>
   </section>;
 }

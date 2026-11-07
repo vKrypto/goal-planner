@@ -1,5 +1,5 @@
-import { Building2, Car, Cpu, Droplets, Dumbbell, Flame, GraduationCap, Guitar, HeartPulse, Home, Pill, Receipt, Shield, Shirt, ShoppingBag, Smartphone, Sparkles, SprayCan, Tv, UtensilsCrossed, Wifi, Zap, type LucideIcon } from 'lucide-react';
-import { type Expense, type Purchase } from './model';
+import { BadgeCheck, BookOpen, Clapperboard, Headphones, Lightbulb, Music, Package, Youtube, Building2, Car, Cpu, Droplets, Dumbbell, Flame, GraduationCap, Guitar, HeartPulse, Home, Pill, Receipt, Shield, Shirt, ShoppingBag, Smartphone, Sparkles, SprayCan, Tv, UtensilsCrossed, Wifi, Zap, type LucideIcon } from 'lucide-react';
+import { type Expense, type Membership, type Purchase } from './model';
 
 /**
  * Frontend-only category → default icon mapping. Used when a purchase has no photo.
@@ -37,6 +37,18 @@ export const EXPENSE_STYLES: CategoryStyle[] = [
 ];
 export const EXPENSE_OTHER: CategoryStyle = { label: 'Other', icon: Receipt, color: '#7c8c66', tint: '#f0f3e9', keywords: [] };
 export const DEFAULT_EXPENSE_CATEGORIES = EXPENSE_STYLES.map(c => c.label);
+/** Membership name → icon (matched on keywords in the membership name). */
+export const MEMBERSHIP_STYLES: CategoryStyle[] = [
+  { label: 'Amazon Prime', icon: Package, color: '#2f6f8f', tint: '#e3eff5', keywords: ['prime', 'amazon'] },
+  { label: 'YouTube', icon: Youtube, color: '#b04040', tint: '#f8e5e5', keywords: ['youtube'] },
+  { label: 'Audiobooks', icon: Headphones, color: '#b07a2f', tint: '#f8efe0', keywords: ['audible', 'audiobook', 'kuku', 'storytel'] },
+  { label: 'Learning', icon: Lightbulb, color: '#6a7f4a', tint: '#edf2e3', keywords: ['deepstash', 'blinkist', 'coursera', 'udemy', 'duolingo', 'learn'] },
+  { label: 'Music', icon: Music, color: '#3f8a5f', tint: '#e4f2ea', keywords: ['spotify', 'music', 'gaana', 'jiosaavn', 'apple music'] },
+  { label: 'Video', icon: Clapperboard, color: '#8a4f6f', tint: '#f4e7ee', keywords: ['netflix', 'hotstar', 'disney', 'sonyliv', 'zee5', 'jiocinema', 'video'] },
+  { label: 'Reading', icon: BookOpen, color: '#7a6a5a', tint: '#f1ece6', keywords: ['kindle', 'medium', 'news', 'magazine', 'scribd'] },
+];
+export const MEMBERSHIP_OTHER: CategoryStyle = { label: 'Membership', icon: BadgeCheck, color: '#7c8c66', tint: '#f0f3e9', keywords: [] };
+export const membershipStyle = (name: string) => { const n = name.toLowerCase(); return MEMBERSHIP_STYLES.find(s => s.keywords.some(k => n.includes(k))) ?? MEMBERSHIP_OTHER; };
 export const OTHER_STYLE: CategoryStyle = { label: 'Other', icon: ShoppingBag, color: '#7c8c66', tint: '#f0f3e9', keywords: [] };
 export const DEFAULT_CATEGORIES = CATEGORY_STYLES.map(c => c.label);
 
@@ -52,7 +64,7 @@ export function categoryStyle(category = '', name = '', kind: 'purchase' | 'expe
 }
 export const categoryName = (p: Purchase | Expense) => p.category?.trim() || 'Uncategorised';
 
-export function CategoryArt({ item, size = 'card' }: { item: Purchase | Expense; size?: 'card' | 'small' }) {
-  const s = item.type === 'expense' ? categoryStyle(item.category, item.title, 'expense') : categoryStyle(item.category, item.name); const Icon = s.icon;
+export function CategoryArt({ item, size = 'card' }: { item: Purchase | Expense | Membership; size?: 'card' | 'small' }) {
+  const s = item.type === 'membership' ? membershipStyle(item.title) : item.type === 'expense' ? categoryStyle(item.category, item.title, 'expense') : categoryStyle(item.category, item.name); const Icon = s.icon;
   return <span className={`category-art ${size}`} style={{ background: s.tint, color: s.color }} aria-hidden="true"><Icon size={size === 'card' ? 34 : 16} strokeWidth={1.6}/></span>;
 }

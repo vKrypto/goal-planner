@@ -69,3 +69,13 @@ testFlex('expenses validate amount and a real date, keep category, and are title
   assertFlex.throws(() => v(wrap({ ...e, amount: -1 })));
   assertFlex.throws(() => v(wrap({ ...e, title: ' ' })));
 });
+testFlex('memberships validate billing cycle and optional renewal, and convert monthly/yearly cost', async () => {
+  const { validateData: v, monthlyCost, yearlyCost, dateOf } = await import('../src/model.ts');
+  const m = { id: 'm1', type: 'membership', status: 'active', notes: '', createdAt: '2026-11-06T00:00:00Z', updatedAt: '2026-11-06T00:00:00Z', title: 'Deepstash', plan: 'Pro', billing: 'yearly', price: 30000, renewalDate: '', link: '' };
+  const wrap = (item: object) => ({ schemaVersion: 1, settings: { currency: 'INR' }, items: [item] });
+  const out = v(wrap(m)).items[0] as Parameters<typeof monthlyCost>[0];
+  assertFlex.equal(yearlyCost(out), 30000); assertFlex.equal(monthlyCost(out), 2500); assertFlex.equal(dateOf(out), '');
+  assertFlex.equal(yearlyCost({ ...out, billing: 'monthly', price: 14900 }), 178800);
+  assertFlex.throws(() => v(wrap({ ...m, billing: 'weekly' })));
+  assertFlex.throws(() => v(wrap({ ...m, renewalDate: '2026-13-01' })));
+});
